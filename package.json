@@ -1,0 +1,16 @@
+{
+  "name": "playfree-games",
+  "version": "1.0.0",
+  "description": "Free real-time multiplayer games platform",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  },
+  "keywords": ["multiplayer", "chess", "connect4", "tictactoe", "games"],
+  "author": "You",
+  "license": "MIT"
+}
