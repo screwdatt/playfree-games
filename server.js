@@ -50,14 +50,10 @@ io.on('connection', socket => {
       room.state.board[toRow][toCol] = piece;
       room.state.board[fromRow][fromCol] = null;
       room.state.turn = turnColor === 'w' ? 'b' : 'w';
-
-      const winner = checkmate(room.state.board, room.state.turn === 'w' ? 'b' : 'w');
-      if (winner) io.to(roomId).emit('end', winner === 'w' ? room.players[0].name : room.players[1].name);
-
       io.to(roomId).emit('state', room.state);
     }
 
-    // Tic-Tac-Toe
+    // Tic-Tac-Toe & Connect 4 (unchanged)
     if (room.game === 'tictactoe' && moveData.type === 'place') {
       if (!room.state.board[moveData.pos]) {
         room.state.board[moveData.pos] = playerIdx === 0 ? 'X' : 'O';
@@ -65,8 +61,6 @@ io.on('connection', socket => {
         io.to(roomId).emit('state', room.state);
       }
     }
-
-    // Connect 4
     if (room.game === 'connect4' && moveData.type === 'drop') {
       for (let r = 5; r >= 0; r--) {
         if (!room.state.board[r][moveData.col]) {
@@ -116,59 +110,48 @@ function isValidChessMove(board, from, to, turn) {
   const target = board[toRow][toCol];
   if (target && ((turn === 'w' && target === target.toUpperCase()) || (turn === 'b' && target === target.toLowerCase()))) return false;
 
-  const dx = toCol - fromCol;
-  const dy = toRow - fromRow;
-  const absDx = Math.abs(dx);
-  const absDy = Math.abs(dy);
-
+  const dx = Math.abs(toCol - fromCol);
+  const dy = Math.abs(toRow - fromRow);
   const lowerPiece = piece.toLowerCase();
 
-  // Pawn
+  // Pawn (forward 1, diagonal capture)
   if (lowerPiece === 'p') {
     const dir = turn === 'w' ? -1 : 1;
-    if (dx === 0 && absDy === 1 && !target) return true; // Forward
-    if (absDx === 1 && dy === dir && target) return true; // Capture
-    return false;
+    const forward = (toRow - fromRow === dir) && (toCol === fromCol);
+    const capture = (Math.abs(toCol - fromCol) === 1) && (toRow - fromRow === dir);
+    return (forward && !target) || (capture && target);
   }
 
-  // Knight
-  if (lowerPiece === 'n') {
-    return (absDx === 1 && absDy === 2) || (absDx === 2 && absDy === 1);
-  }
+  // Knight (L-shape)
+  if (lowerPiece === 'n') return (dx === 1 && dy === 2) || (dx === 2 && dy === 1);
 
-  // King
-  if (lowerPiece === 'k') {
-    return absDx <= 1 && absDy <= 1;
-  }
+  // King (1 step any direction)
+  if (lowerPiece === 'k') return dx <= 1 && dy <= 1;
 
-  // Sliding pieces
-  if (lowerPiece === 'r') {
-    if (!(dx === 0 || dy === 0)) return false;
-  } else if (lowerPiece === 'b') {
-    if (absDx !== absDy) return false;
-  } else if (lowerPiece === 'q') {
-    if (!(dx === 0 || dy === 0 || absDx === absDy)) return false;
-  } else {
-    return false;
-  }
+  // Rook (horizontal/vertical)
+  if (lowerPiece === 'r') return (dx === 0 || dy === 0) && pathClear(board, from, to);
 
-  // Check path clear
-  const steps = Math.max(absDx, absDy);
-  const sx = dx ? dx / absDx : 0;
-  const sy = dy ? dy / absDy : 0;
-  for (let i = 1; i < steps; i++) {
-    const checkRow = fromRow + sy * i;
-    const checkCol = fromCol + sx * i;
-    if (board[checkRow][checkCol]) return false;
-  }
+  // Bishop (diagonal)
+  if (lowerPiece === 'b') return dx === dy && pathClear(board, from, to);
 
+  // Queen (rook + bishop)
+  if (lowerPiece === 'q') return ((dx === 0 || dy === 0) || dx === dy) && pathClear(board, from, to);
+
+  return false;
+}
+
+function pathClear(board, from, to) {
+  const fromRow = Math.floor(from / 8), fromCol = from % 8;
+  const toRow = Math.floor(to / 8), toCol = to % 8;
+  const dx = toCol - fromCol > 0 ? 1 : (toCol - fromCol < 0 ? -1 : 0);
+  const dy = toRow - fromRow > 0 ? 1 : (toRow - fromRow < 0 ? -1 : 0);
+  let r = fromRow + dy, c = fromCol + dx;
+  while (r !== toRow || c !== toCol) {
+    if (board[r][c]) return false;
+    r += dy; c += dx;
+  }
   return true;
 }
 
-function checkmate(board, losingColor) {
-  // Simplified - no full checkmate yet (add later)
-  return null;
-}
-
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log('PlayFree.games LIVE - Chess Validated!'));
+server.listen(PORT, () => console.log('PlayFree.games LIVE!'));
