@@ -13,10 +13,10 @@ document.querySelectorAll('.card').forEach(card => {
 
 socket.on('joined', (id, data) => {
   room = id;
-  game = data.game;  // Fixed: Set game type
+  game = data.game;
   document.getElementById('code').textContent = id;
   document.getElementById('players').innerHTML = '<b>Players:</b> ' + data.players.map(p => p.name).join(' vs ');
-  render(game, data.state);  // Fixed: Render on join
+  render(game, data.state);
 });
 
 socket.on('players', p => document.getElementById('players').innerHTML = '<b>Players:</b> ' + p.map(x => x.name).join(' vs '));
@@ -43,7 +43,7 @@ function render(g, s) {
   if (g === 'chess') renderChess(area, s);
 }
 
-// Tic-Tac-Toe
+// Tic-Tac-Toe & Connect 4 (unchanged from before)
 function renderTTT(a, s) {
   for (let i = 0; i < 9; i++) {
     const cell = document.createElement('div');
@@ -54,7 +54,6 @@ function renderTTT(a, s) {
   }
 }
 
-// Connect 4
 function renderC4(a, s) {
   for (let col = 0; col < 7; col++) {
     const column = document.createElement('div');
@@ -70,18 +69,20 @@ function renderC4(a, s) {
   }
 }
 
-// Chess - Solid pieces, full squares, mobile clicks
+// Chess - Simple text pieces (R N B Q K P / r n b q k p) + full clicks
 function renderChess(a, s) {
   const board = document.createElement('div');
   board.style = 'width:min(95vw,480px);height:min(95vw,480px);margin:20px auto;display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);border:12px solid #654321;border-radius:12px;background:#8B5A2B;box-shadow:0 15px 40px rgba(0,0,0,0.7);touch-action:manipulation';
 
-  const whitePieces = {'P':'♙','R':'♖','N':'♘','B':'♗','Q':'♕','K':'♔'};
-  const blackPieces = {'p':'♟','r':'♜','n':'♞','b':'♝','q':'♛','k':'♚'};
+  const chess = new Chess(s.fen);
+  const pieces = chess.board();
+  const whitePieces = { 'P':'P', 'R':'R', 'N':'N', 'B':'B', 'Q':'Q', 'K':'K' };
+  const blackPieces = { 'p':'p', 'r':'r', 'n':'n', 'b':'b', 'q':'q', 'k':'k' };
 
   for (let row = 7; row >= 0; row--) {  // White at bottom
     for (let col = 0; col < 8; col++) {
       const idx = row * 8 + col;
-      const piece = s.board[row][col];
+      const piece = pieces[row][col];
       const light = (row + col) % 2 === 0;
 
       const sq = document.createElement('div');
@@ -89,9 +90,9 @@ function renderChess(a, s) {
       sq.style = `background:${light?'#f0d9b5':'#b58863'};display:flex;align-items:center;justify-content:center;font-size:clamp(32px,8vw,48px);cursor:pointer;user-select:none;touch-action:manipulation;-webkit-tap-highlight-color:transparent;border:1px solid rgba(0,0,0,0.1)`;
 
       if (piece) {
-        const isWhite = piece === piece.toUpperCase();
-        const symbol = isWhite ? whitePieces[piece] : blackPieces[piece];
-        sq.innerHTML = `<span style="color:\( {isWhite?'#FFFFFF':'#000000'};text-shadow: \){isWhite?'2px 2px 4px #000':'1px 1px 3px #FFF'};font-weight:bold;filter:drop-shadow(0 0 2px \( {isWhite?'#000':'#FFF'})"> \){symbol}</span>`;
+        const isWhite = piece.color === 'w';
+        const symbol = isWhite ? whitePieces[piece.type] : blackPieces[piece.type];
+        sq.innerHTML = `<span style="color:\( {isWhite?'#FFFFFF':'#000000'};text-shadow: \){isWhite?'2px 2px 4px #000':'1px 1px 3px #FFF'};font-weight:bold;font-size:1.2em">${symbol}</span>`;
       }
 
       if (selected === idx) sq.style.background = '#60a5fa99';
@@ -101,10 +102,7 @@ function renderChess(a, s) {
         const i = parseInt(sq.dataset.idx);
         if (selected === i) selected = null;
         else if (selected !== null) { move({from: selected, to: i}); selected = null; }
-        else {
-          const p = piece;
-          if (p && ((s.turn === 'w' && p === p.toUpperCase()) || (s.turn === 'b' && p !== p.toUpperCase()))) selected = i;
-        }
+        else if (piece && ((s.turn === 'w' && isWhite) || (s.turn === 'b' && !isWhite))) selected = i;
         render(game, s);
       };
       sq.addEventListener('click', handleClick);
