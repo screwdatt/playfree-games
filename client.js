@@ -1,5 +1,5 @@
 const socket = io();
-let room = null, game = null;
+let room = null, game = null, selected = null; // for chess
 
 document.querySelectorAll('.card').forEach(c => c.onclick = () => {
   game = c.dataset.game;
@@ -20,7 +20,7 @@ socket.on('players', p => document.getElementById('players').innerHTML = '<b>Pla
 socket.on('state', s => render(game, s));
 socket.on('end', w => alert(w ? `${w} wins!` : 'Draw!'));
 
-function move(m) { if (room) socket.emit('move', room, m); }
+function move(data) { if (room) socket.emit('move', room, data); }
 function send() { const i = document.getElementById('msg'); if (i.value) { socket.emit('chat', room, i.value); i.value=''; } }
 function copy() { navigator.clipboard.writeText(location.origin + '?room=' + room); alert('Link copied!'); }
 
@@ -33,54 +33,69 @@ socket.on('chat', (n, m) => {
 function render(g, s) {
   const area = document.getElementById('game');
   area.innerHTML = '';
+  selected = null;
+
   if (g === 'tictactoe') renderTTT(area, s);
   if (g === 'connect4') renderC4(area, s);
   if (g === 'chess') renderChess(area, s);
 }
 
+// Tic-Tac-Toe (perfect on mobile)
 function renderTTT(a, s) {
+  const symbols = ['', 'X', 'O'];
   for (let i = 0; i < 9; i++) {
-    const c = document.createElement('div');
-    c.textContent = s.board[i] || '';
-    c.style = 'width:100px;height:100px;font-size:70px;text-align:center;line-height:100px;border:3px solid #60a5fa;display:inline-block;cursor:pointer;background:#1e293b';
-    c.onclick = () => move(i);
-    a.appendChild(c);
+    const cell = document.createElement('div');
+    cell.textContent = symbols[s.board[i] === 'X' ? 1 : s.board[i] === 'O' ? 2 : 0];
+    cell.style = 'width:33.33%;height:100px;font-size:60px;text-align:center;line-height:100px;border:2px solid #60a5fa;float:left;cursor:pointer;background:#1e293b';
+    if (!s.board[i]) cell.onclick = () => move({type:'place', pos:i});
+    a.appendChild(cell);
   }
 }
 
+// Connect 4 (tap column)
 function renderC4(a, s) {
-  for (let r = 0; r < 6; r++) {
-    for (let c = 0; c < 7; c++) {
-      const d = document.createElement('div');
-      const color = s.board[r][c] === 'R' ? 'red' : s.board[r][c] === 'Y' ? 'yellow' : '#333';
-      d.style = `width:60px;height:60px;border-radius:50%;background:${color};display:inline-block;margin:4px;cursor:pointer`;
-      d.onclick = () => move(c);
-      a.appendChild(d);
+  const colors = { 'R': '#e74c3c', 'Y': '#f1c40f', '': '#2c3e50' };
+  for (let col = 0; col < 7; col++) {
+    const column = document.createElement('div');
+    column.style = 'display:inline-block;width:14%;text-align:center';
+    for (let row = 5; row >= 0; row--) {
+      const cell = document.createElement('div');
+      cell.style = `width:50px;height:50px;border-radius:50%;background:${colors[s.board[row][col]] || '#2c3e50'};margin:6px auto;cursor:pointer;border:3px solid #34495e`;
+      if (!s.board[0][col] || s.board.some(r => r[col] === '')) cell.onclick = () => move({type:'drop', col});
+      column.appendChild(cell);
     }
-    a.appendChild(document.createElement('br'));
+    a.appendChild(column);
   }
 }
 
+// Chess — tap to select, tap to move (mobile-first!)
 function renderChess(a, s) {
-  const b = document.createElement('div');
-  b.style = 'width:480px;height:480px;display:grid;grid-template-columns:repeat(8,1fr);margin:auto;background:#333';
-  const pieces = { 'R':'R', 'N':'N', 'B':'B', 'Q':'Q', 'K':'K', 'P':'P', 'r':'r', 'n':'n', 'b':'b', 'q':'q', 'k':'k', 'p':'p' };
-  s.board.flat().forEach((p, i) => {
-    const sq = document.createElement('div');
-    sq.textContent = pieces[p] || '';
-    sq.style = `background:${(Math.floor(i/8)+i%8)%2?'#8b5a2b':'#f0d9b5'};font-size:50px;text-align:center;line-height:60px;cursor:pointer`;
-    sq.onclick = () => move(i);
-    b.appendChild(sq);
-  });
-  a.appendChild(b);
-}
+  const board = document.createElement('div');
+  board.style = 'width:100%;max-width:480px;margin:auto;display:grid;grid-template-columns:repeat(8,1fr);aspect-ratio:1/1;background:#333';
+  
+  const pieceUnicode = {
+    'K': 'K', 'Q': 'Q', 'R': 'R', 'B': 'B', 'N': 'N', 'P': 'P',
+    'k': 'k', 'q': 'q', 'r': 'r', 'b': 'b', 'n': 'n', 'p': 'p'
+  };
 
-// Auto-join from URL
-const urlParams = new URLSearchParams(location.search);
-const joinRoom = urlParams.get('room');
-if (joinRoom) {
-  room = joinRoom;
-  document.getElementById('lobby').classList.add('hidden');
-  document.getElementById('room').classList.remove('hidden');
-  socket.emit('join', joinRoom, prompt('Your name?') || 'Guest');
-}
+  s.board.flat().forEach((piece, i) => {
+    const sq = document.createElement('div');
+    const isLight = (Math.floor(i/8) + i%8) % 2 === 0;
+    sq.style = `background:${isLight?'#f0d9b5':'#8b5a2b'};display:flex;align-items:center;justify-content:center;font-size:8vw;cursor:pointer`;
+    sq.textContent = piece ? pieceUnicode[piece] || piece : '';
+    
+    sq.onclick = () => {
+      if (selected === i) { selected = null; render(game, s); return; }
+      if (selected !== null) {
+        move({from: selected, to: i});
+        selected = null;
+      } else if (piece && ((s.turn === 'w' && 'PRNBQK'.includes(piece)) || (s.turn === 'b' && 'prnbqk'.includes(piece)))) {
+        selected = i;
+        sq.style.background = '#60a5fa';
+      }
+    };
+    
+    if (selected === i) sq.style.background = '#60a5fa';
+    board.appendChild(sq);
+  });
+  a
