@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PlayFree.games</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="lobby">
+    <h1>PlayFree.games</h1>
+    <input id="name" placeholder="Your name">
+    <div class="grid">
+      <div class="card" data-game="tictactoe">Tic-Tac-Toe</div>
+      <div class="card" data-game="connect4">Connect 4</div>
+      <div class="card" data-game="chess">Chess</div>
+    </div>
+  </div>
+
+  <div id="room" class="hidden">
+    <h2 id="title"></h2>
+    <div>Room <b id="code"></b> — <span onclick="copy()" style="cursor:pointer;color:#60a5fa">Copy link</span></div>
+    <div id="players"></div>
+    <div id="game"></div>
+    <div class="chat"><div id="log"></div><input id="msg" placeholder="Chat..."><button onclick="send()">Send</button></div>
+    <button onclick="location.reload()">Leave Room</button>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="client.js"></script>
+</body>
+</html>
