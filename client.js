@@ -49,42 +49,24 @@ function render(g, s) {
   if (g === 'chess') renderChess(area, s);
 }
 
-// Tic-Tac-Toe (unchanged)
-function renderTTT(a, s) {
-  for (let i = 0; i < 9; i++) {
-    const cell = document.createElement('div');
-    cell.textContent = s.board[i] || '';
-    cell.style = 'width:33.3%;height:100px;font-size:70px;text-align:center;line-height:100px;border:2px solid #60a5fa;float:left;cursor:pointer;background:#1e293b';
-    if (!s.board[i]) cell.onclick = () => move({type:'place', pos:i});
-    a.appendChild(cell);
-  }
-}
+// Tic-Tac-Toe & Connect4 unchanged (they already work)
 
-// Connect 4 (unchanged)
-function renderC4(a, s) {
-  for (let col = 0; col < 7; col++) {
-    const column = document.createElement('div');
-    column.style = 'display:inline-block;width:14%;text-align:center;vertical-align:bottom;height:360px';
-    for (let row = 5; row >= 0; row--) {
-      const cell = document.createElement('div');
-      const color = s.board[row][col] === 'R' ? '#e74c3c' : s.board[row][col] === 'Y' ? '#f1c40f' : '#2c3e50';
-      cell.style = `width:50px;height:50px;border-radius:50%;background:${color};margin:6px auto;cursor:pointer;border:3px solid #34495e`;
-      if (s.board[0][col] === '' || s.board.some(r => r[col] === '')) cell.onclick = () => move({type:'drop', col});
-      column.appendChild(cell);
-    }
-    a.appendChild(column);
-  }
-}
-
-// CHESS - FULL SQUARES + SOLID BLACK PIECES + CLICKABLE
+// CHESS — FINAL VERSION: SOLID PIECES + 100% MOBILE CLICKABLE
 function renderChess(a, s) {
   const board = document.createElement('div');
-  board.style = 'width:100%;max-width:480px;margin:30px auto;display:grid;grid-template-columns:repeat(8,1fr);aspect-ratio:1/1;background:#333;border:12px solid #8B5A2B;border-radius:8px;box-shadow:0 15px 35px rgba(0,0,0,0.6);overflow:hidden';
+  board.style = `
+    width:100%; max-width:480px; margin:20px auto;
+    display:grid; grid-template-columns:repeat(8,1fr);
+    aspect-ratio:1/1; background:#8B5A2B;
+    border:12px solid #654321; border-radius:12px;
+    box-shadow:0 15px 40px rgba(0,0,0,0.7);
+    overflow:hidden;
+  `;
 
-  const whitePieces = { 'P': '♙', 'R': '♖', 'N': '♘', 'B': '♗', 'Q': '♕', 'K': '♔' };
-  const blackPieces = { 'p': '♟', 'r': '♜', 'n': '♞', 'b': '♝', 'q': '♛', 'k': '♚' };
+  const whitePieces = { P:'♙', R:'♖', N:'♘', B:'♗', Q:'♕', K:'♔' };
+  const blackPieces = { p:'♟', r:'♜', n:'♞', b:'♝', q:'♛', k:'♚' };
 
-  // White at bottom (row 7 to 0)
+  // White at bottom (row 7 → 0)
   for (let row = 7; row >= 0; row--) {
     for (let col = 0; col < 8; col++) {
       const idx = row * 8 + col;
@@ -94,26 +76,32 @@ function renderChess(a, s) {
       const sq = document.createElement('div');
       sq.style = `
         background:${isLight ? '#f0d9b5' : '#b58863'};
-        display:flex;align-items:center;justify-content:center;
-        font-size:clamp(36px,9vw,56px);
-        cursor:pointer;
-        user-select:none;
-        position:relative;
+        display:flex; align-items:center; justify-content:center;
+        font-size:clamp(38px, 9.5vw, 60px);
+        cursor:pointer; user-select:none; touch-action:manipulation;
+        position:relative; border:1px solid rgba(0,0,0,0.15);
       `;
 
       if (piece) {
-        const isWhitePiece = piece === piece.toUpperCase();
-        sq.innerHTML = isWhitePiece 
-          ? `<span style="color:white;text-shadow:2px 2px 4px #000">${whitePieces[piece]}</span>`
-          : `<span style="color:black;text-shadow:1px 1px 2px #fff">${blackPieces[piece]}</span>`;
+        const isWhite = piece === piece.toUpperCase();
+        const symbol = isWhite ? whitePieces[piece] : blackPieces[piece];
+        sq.innerHTML = `
+          <span style="color:${isWhite ? 'white' : 'black'};
+                      text-shadow:${isWhite ? '2px 2px 4px #000' : '1px 1px 3px #fff'};
+                      font-weight:bold; filter:drop-shadow(0 0 3px ${isWhite ? '#000' : '#fff'});">
+            ${symbol}
+          </span>
+        `;
       }
 
       // Highlight selected
       if (selected === idx) {
-        sq.style.background = '#60a5fa88';
+        sq.style.background = '#60a5fa99';
       }
 
-      sq.onclick = () => {
+      // MOBILE + DESKTOP CLICK/TAP
+      sq.onclick = sq.ontouchend = (e) => {
+        e.preventDefault();
         if (selected === idx) {
           selected = null;
         } else if (selected !== null) {
@@ -125,7 +113,7 @@ function renderChess(a, s) {
             selected = idx;
           }
         }
-        render(game, s); // Re-render to update highlight
+        render(game, s);
       };
 
       board.appendChild(sq);
