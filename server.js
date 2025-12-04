@@ -1,6 +1,7 @@
 const express = require('express');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
+const Chess = require('chess.js').Chess;
 
 const app = express();
 const server = createServer(app);
@@ -41,16 +42,17 @@ io.on('connection', socket => {
 
     if ((turnColor === 'w' && !isWhite) || (turnColor === 'b' && isWhite)) return;
 
-    if (room.game === 'chess' && isValidChessMove(room.state.board, moveData.from, moveData.to, turnColor)) {
-      const fromRow = Math.floor(moveData.from / 8);
-      const fromCol = moveData.from % 8;
-      const toRow = Math.floor(moveData.to / 8);
-      const toCol = moveData.to % 8;
-      const piece = room.state.board[fromRow][fromCol];
-      room.state.board[toRow][toCol] = piece;
-      room.state.board[fromRow][fromCol] = null;
-      room.state.turn = turnColor === 'w' ? 'b' : 'w';
-      io.to(roomId).emit('state', room.state);
+    if (room.game === 'chess') {
+      const chess = new Chess(room.state.fen);
+      const from = String.fromCharCode(97 + (moveData.from % 8)) + (8 - Math.floor(moveData.from / 8));
+      const to = String.fromCharCode(97 + (moveData.to % 8)) + (8 - Math.floor(moveData.to / 8));
+      const move = chess.move({ from, to, promotion: 'q' });
+      if (move) {
+        room.state.fen = chess.fen();
+        room.state.turn = chess.turn() === 'w' ? 'w' : 'b';
+        io.to(roomId).emit('state', room.state);
+        if (chess.isGameOver()) io.to(roomId).emit('end', chess.turn() === 'w' ? room.players[1].name : room.players[0].name);
+      }
     }
 
     // Tic-Tac-Toe & Connect 4 (unchanged)
@@ -82,76 +84,9 @@ io.on('connection', socket => {
 function initGame(g) {
   if (g === 'tictactoe') return {board: Array(9).fill(''), turn: 0};
   if (g === 'connect4') return {board: Array(6).fill().map(()=>Array(7).fill('')), turn: 0};
-  if (g === 'chess') return {
-    board: [
-      ['r','n','b','q','k','b','n','r'],
-      ['p','p','p','p','p','p','p','p'],
-      [null,null,null,null,null,null,null,null],
-      [null,null,null,null,null,null,null,null],
-      [null,null,null,null,null,null,null,null],
-      [null,null,null,null,null,null,null,null],
-      ['P','P','P','P','P','P','P','P'],
-      ['R','N','B','Q','K','B','N','R']
-    ],
-    turn: 'w'
-  };
+  if (g === 'chess') return {fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', turn: 'w'};
   return {};
 }
 
-function isValidChessMove(board, from, to, turn) {
-  const fromRow = Math.floor(from / 8), fromCol = from % 8;
-  const toRow = Math.floor(to / 8), toCol = to % 8;
-  const piece = board[fromRow][fromCol];
-  if (!piece) return false;
-
-  const isWhitePiece = piece === piece.toUpperCase();
-  if ((turn === 'w' && !isWhitePiece) || (turn === 'b' && isWhitePiece)) return false;
-
-  const target = board[toRow][toCol];
-  if (target && ((turn === 'w' && target === target.toUpperCase()) || (turn === 'b' && target === target.toLowerCase()))) return false;
-
-  const dx = Math.abs(toCol - fromCol);
-  const dy = Math.abs(toRow - fromRow);
-  const lowerPiece = piece.toLowerCase();
-
-  // Pawn (forward 1, diagonal capture)
-  if (lowerPiece === 'p') {
-    const dir = turn === 'w' ? -1 : 1;
-    const forward = (toRow - fromRow === dir) && (toCol === fromCol);
-    const capture = (Math.abs(toCol - fromCol) === 1) && (toRow - fromRow === dir);
-    return (forward && !target) || (capture && target);
-  }
-
-  // Knight (L-shape)
-  if (lowerPiece === 'n') return (dx === 1 && dy === 2) || (dx === 2 && dy === 1);
-
-  // King (1 step any direction)
-  if (lowerPiece === 'k') return dx <= 1 && dy <= 1;
-
-  // Rook (horizontal/vertical)
-  if (lowerPiece === 'r') return (dx === 0 || dy === 0) && pathClear(board, from, to);
-
-  // Bishop (diagonal)
-  if (lowerPiece === 'b') return dx === dy && pathClear(board, from, to);
-
-  // Queen (rook + bishop)
-  if (lowerPiece === 'q') return ((dx === 0 || dy === 0) || dx === dy) && pathClear(board, from, to);
-
-  return false;
-}
-
-function pathClear(board, from, to) {
-  const fromRow = Math.floor(from / 8), fromCol = from % 8;
-  const toRow = Math.floor(to / 8), toCol = to % 8;
-  const dx = toCol - fromCol > 0 ? 1 : (toCol - fromCol < 0 ? -1 : 0);
-  const dy = toRow - fromRow > 0 ? 1 : (toRow - fromRow < 0 ? -1 : 0);
-  let r = fromRow + dy, c = fromCol + dx;
-  while (r !== toRow || c !== toCol) {
-    if (board[r][c]) return false;
-    r += dy; c += dx;
-  }
-  return true;
-}
-
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log('PlayFree.games LIVE!'));
+server.listen(PORT, () => console.log('PlayFree.games LIVE - Chess Perfected!'));
