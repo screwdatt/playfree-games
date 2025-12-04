@@ -42,7 +42,6 @@ io.on('connection', socket => {
     if ((turnColor === 'w' && !isWhite) || (turnColor === 'b' && isWhite)) return;
 
     if (room.game === 'chess' && isValidChessMove(room.state.board, moveData.from, moveData.to, turnColor)) {
-      // Move the piece
       const fromRow = Math.floor(moveData.from / 8);
       const fromCol = moveData.from % 8;
       const toRow = Math.floor(moveData.to / 8);
@@ -52,13 +51,32 @@ io.on('connection', socket => {
       room.state.board[fromRow][fromCol] = null;
       room.state.turn = turnColor === 'w' ? 'b' : 'w';
 
-      // Check win (simplified - full checkmate later)
       const winner = checkmate(room.state.board, room.state.turn === 'w' ? 'b' : 'w');
       if (winner) io.to(roomId).emit('end', winner === 'w' ? room.players[0].name : room.players[1].name);
 
       io.to(roomId).emit('state', room.state);
     }
-    // ... (TicTacToe & Connect4 same as before)
+
+    // Tic-Tac-Toe
+    if (room.game === 'tictactoe' && moveData.type === 'place') {
+      if (!room.state.board[moveData.pos]) {
+        room.state.board[moveData.pos] = playerIdx === 0 ? 'X' : 'O';
+        room.state.turn = 1 - room.state.turn;
+        io.to(roomId).emit('state', room.state);
+      }
+    }
+
+    // Connect 4
+    if (room.game === 'connect4' && moveData.type === 'drop') {
+      for (let r = 5; r >= 0; r--) {
+        if (!room.state.board[r][moveData.col]) {
+          room.state.board[r][moveData.col] = playerIdx === 0 ? 'R' : 'Y';
+          room.state.turn = 1 - room.state.turn;
+          io.to(roomId).emit('state', room.state);
+          break;
+        }
+      }
+    }
   });
 
   socket.on('chat', (id, msg) => {
@@ -81,78 +99,76 @@ function initGame(g) {
       ['P','P','P','P','P','P','P','P'],
       ['R','N','B','Q','K','B','N','R']
     ],
-    turn: 'w'  // White at bottom
+    turn: 'w'
   };
+  return {};
 }
 
 function isValidChessMove(board, from, to, turn) {
   const fromRow = Math.floor(from / 8), fromCol = from % 8;
   const toRow = Math.floor(to / 8), toCol = to % 8;
   const piece = board[fromRow][fromCol];
-  if (!piece || (turn === 'w' ? piece.isLowerCase() : !piece.isLowerCase())) return false;  // Wrong color
+  if (!piece) return false;
+
+  const isWhitePiece = piece === piece.toUpperCase();
+  if ((turn === 'w' && !isWhitePiece) || (turn === 'b' && isWhitePiece)) return false;
+
+  const target = board[toRow][toCol];
+  if (target && ((turn === 'w' && target === target.toUpperCase()) || (turn === 'b' && target === target.toLowerCase()))) return false;
 
   const dx = toCol - fromCol;
   const dy = toRow - fromRow;
-  const target = board[toRow][toCol];
+  const absDx = Math.abs(dx);
+  const absDy = Math.abs(dy);
 
-  if (target && (turn === 'w' === target.isUpperCase())) return false;  // Can't capture own
+  const lowerPiece = piece.toLowerCase();
 
-  const deltas = getDeltas(piece);
-  if (!deltas.some(d => d.dx === dx && d.dy === dy)) return false;
-
-  // Path clear for sliding pieces
-  if (isSliding(piece)) {
-    const steps = Math.max(Math.abs(dx), Math.abs(dy));
-    const sx = dx / steps, sy = dy / steps;
-    for (let i = 1; i < steps; i++) {
-      if (board[fromRow + sy * i][fromCol + sx * i]) return false;
-    }
+  // Pawn
+  if (lowerPiece === 'p') {
+    const dir = turn === 'w' ? -1 : 1;
+    if (dx === 0 && absDy === 1 && !target) return true; // Forward
+    if (absDx === 1 && dy === dir && target) return true; // Capture
+    return false;
   }
 
-  // Pawn special
-  if (piece.toLowerCase() === 'p') {
-    if (dx === 0 && dy === 0) return false;
-    const dir = turn === 'w' ? -1 : 1;
-    if (dx === 0 && Math.abs(dy) === 1) return true;  // Forward
-    if (Math.abs(dx) === 1 && dy === dir) return !target;  // Wait, capture only if target
-    no, capture if target
-    if (Math.abs(dx) === 1 && dy === dir && target) return true;
+  // Knight
+  if (lowerPiece === 'n') {
+    return (absDx === 1 && absDy === 2) || (absDx === 2 && absDy === 1);
+  }
+
+  // King
+  if (lowerPiece === 'k') {
+    return absDx <= 1 && absDy <= 1;
+  }
+
+  // Sliding pieces
+  if (lowerPiece === 'r') {
+    if (!(dx === 0 || dy === 0)) return false;
+  } else if (lowerPiece === 'b') {
+    if (absDx !== absDy) return false;
+  } else if (lowerPiece === 'q') {
+    if (!(dx === 0 || dy === 0 || absDx === absDy)) return false;
+  } else {
     return false;
+  }
+
+  // Check path clear
+  const steps = Math.max(absDx, absDy);
+  const sx = dx ? dx / absDx : 0;
+  const sy = dy ? dy / absDy : 0;
+  for (let i = 1; i < steps; i++) {
+    const checkRow = fromRow + sy * i;
+    const checkCol = fromCol + sx * i;
+    if (board[checkRow][checkCol]) return false;
   }
 
   return true;
 }
 
-function getDeltas(p) {
-  const lower = p.toLowerCase();
-  switch(lower) {
-    case 'p': return [{dx:0,dy:-1},{dx:1,dy:-1},{dx:-1,dy:-1}];  // White pawn example
-    case 'r': return getStraight();
-    case 'b': return getDiag();
-    case 'q': return getStraight().concat(getDiag());
-    case 'k': return [{dx:0,dy:1},{dx:0,dy:-1},{dx:1,dy:0},{dx:-1,dy:0},{dx:1,dy:1},{dx:1,dy:-1},{dx:-1,dy:1},{dx:-1,dy:-1}];
-    case 'n': return [{dx:1,dy:2},{dx:1,dy:-2},{dx:-1,dy:2},{dx:-1,dy:-2},{dx:2,dy:1},{dx:2,dy:-1},{dx:-2,dy:1},{dx:-2,dy:-1}];
-  }
-  return [];
-}
-
-function getStraight() {
-  return [{dx:0,dy:1},{dx:0,dy:-1},{dx:1,dy:0},{dx:-1,dy:0}];
-}
-
-function getDiag() {
-  return [{dx:1,dy:1},{dx:1,dy:-1},{dx:-1,dy:1},{dx:-1,dy:-1}];
-}
-
-function isSliding(p) {
-  const lower = p.toLowerCase();
-  return lower === 'r' || lower === 'b' || lower === 'q';
-}
-
 function checkmate(board, losingColor) {
-  // Simplified - expand later
+  // Simplified - no full checkmate yet (add later)
   return null;
 }
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log('Chess VALIDATED & READY!'));
+server.listen(PORT, () => console.log('PlayFree.games LIVE - Chess Validated!'));
