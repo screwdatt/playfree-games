@@ -2,7 +2,8 @@ const socket = io();
 let room = null, game = null, selected = null;
 
 document.querySelectorAll('.card').forEach(card => {
-  card.addEventListener('click', () => {
+  card.addEventListener('click', (e) => {
+    e.preventDefault();
     game = card.dataset.game;
     document.getElementById('lobby').classList.add('hidden');
     document.getElementById('room').classList.remove('hidden');
@@ -25,10 +26,7 @@ socket.on('end', w => alert(w ? `${w} wins!` : 'Draw!'));
 function move(data) { if (room) socket.emit('move', room, data); }
 function send() {
   const i = document.getElementById('msg');
-  if (i.value.trim()) {
-    socket.emit('chat', room, i.value);
-    i.value = '';
-  }
+  if (i.value.trim()) { socket.emit('chat', room, i.value); i.value = ''; }
 }
 function copy() {
   navigator.clipboard.writeText(location.origin + '?room=' + room);
@@ -78,53 +76,65 @@ function renderC4(a, s) {
   }
 }
 
-// Chess - Clean full squares + Unicode
+// CHESS - FULL SQUARES + SOLID BLACK PIECES + CLICKABLE
 function renderChess(a, s) {
   const board = document.createElement('div');
-  board.style = 'width:100%;max-width:480px;margin:auto;display:grid;grid-template-columns:repeat(8,1fr);aspect-ratio:1/1;background:#769656;border:8px solid #b58863;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,0.5)';
+  board.style = 'width:100%;max-width:480px;margin:30px auto;display:grid;grid-template-columns:repeat(8,1fr);aspect-ratio:1/1;background:#333;border:12px solid #8B5A2B;border-radius:8px;box-shadow:0 15px 35px rgba(0,0,0,0.6);overflow:hidden';
 
-  const whitePieces = {'P':'♙','R':'♖','N':'♘','B':'♗','Q':'♕','K':'♔'};
-  const blackPieces = {'p':'♟','r':'♜','n':'♞','b':'♝','q':'♛','k':'♚'};
+  const whitePieces = { 'P': '♙', 'R': '♖', 'N': '♘', 'B': '♗', 'Q': '♕', 'K': '♔' };
+  const blackPieces = { 'p': '♟', 'r': '♜', 'n': '♞', 'b': '♝', 'q': '♛', 'k': '♚' };
 
-  // Render rows from bottom (white at bottom)
+  // White at bottom (row 7 to 0)
   for (let row = 7; row >= 0; row--) {
     for (let col = 0; col < 8; col++) {
       const idx = row * 8 + col;
       const piece = s.board[row][col];
-      const sq = document.createElement('div');
       const isLight = (row + col) % 2 === 0;
-      sq.style = `background:${isLight ? '#f0d9b5' : '#b58863'};display:flex;align-items:center;justify-content:center;font-size:clamp(32px,8vw,48px);cursor:pointer;border:1px solid rgba(0,0,0,0.1);user-select:none`;
-      sq.textContent = piece ? (piece.toUpperCase() === piece ? whitePieces[piece] : blackPieces[piece]) : '';
-      
-      sq.onclick = () => chessClick(idx, s);
-      if (selected === idx) sq.style.background = '#60a5fa77';
+
+      const sq = document.createElement('div');
+      sq.style = `
+        background:${isLight ? '#f0d9b5' : '#b58863'};
+        display:flex;align-items:center;justify-content:center;
+        font-size:clamp(36px,9vw,56px);
+        cursor:pointer;
+        user-select:none;
+        position:relative;
+      `;
+
+      if (piece) {
+        const isWhitePiece = piece === piece.toUpperCase();
+        sq.innerHTML = isWhitePiece 
+          ? `<span style="color:white;text-shadow:2px 2px 4px #000">${whitePieces[piece]}</span>`
+          : `<span style="color:black;text-shadow:1px 1px 2px #fff">${blackPieces[piece]}</span>`;
+      }
+
+      // Highlight selected
+      if (selected === idx) {
+        sq.style.background = '#60a5fa88';
+      }
+
+      sq.onclick = () => {
+        if (selected === idx) {
+          selected = null;
+        } else if (selected !== null) {
+          move({ from: selected, to: idx });
+          selected = null;
+        } else {
+          const p = s.board[row][col];
+          if (p && ((s.turn === 'w' && p === p.toUpperCase()) || (s.turn === 'b' && p === p.toLowerCase()))) {
+            selected = idx;
+          }
+        }
+        render(game, s); // Re-render to update highlight
+      };
+
       board.appendChild(sq);
     }
   }
   a.appendChild(board);
 }
 
-function chessClick(idx, s) {
-  if (selected === idx) { 
-    selected = null; 
-    render(game, s); 
-    return; 
-  }
-  if (selected !== null) {
-    move({from: selected, to: idx});
-    selected = null;
-  } else {
-    const row = Math.floor(idx / 8), col = idx % 8;
-    const piece = s.board[row][col];
-    const isWhitePiece = piece === piece.toUpperCase();
-    if (piece && ((s.turn === 'w' && isWhitePiece) || (s.turn === 'b' && !isWhitePiece))) {
-      selected = idx;
-      render(game, s);
-    }
-  }
-}
-
-// Auto-join (unchanged)
+// Auto-join
 const params = new URLSearchParams(location.search);
 const join = params.get('room');
 if (join) {
@@ -132,4 +142,4 @@ if (join) {
   document.getElementById('lobby').classList.add('hidden');
   document.getElementById('room').classList.remove('hidden');
   socket.emit('join', join, prompt('Your name?') || 'Guest');
-  }
+}
