@@ -49,13 +49,13 @@ io.on('connection', socket => {
       const move = chess.move({ from, to, promotion: 'q' });
       if (move) {
         room.state.fen = chess.fen();
-        room.state.turn = chess.turn() === 'w' ? 'w' : 'b';
+        room.state.turn = chess.turn();
         io.to(roomId).emit('state', room.state);
         if (chess.isGameOver()) io.to(roomId).emit('end', chess.turn() === 'w' ? room.players[1].name : room.players[0].name);
       }
     }
 
-    // Tic-Tac-Toe & Connect 4 (unchanged)
+    // Tic-Tac-Toe
     if (room.game === 'tictactoe' && moveData.type === 'place') {
       if (!room.state.board[moveData.pos]) {
         room.state.board[moveData.pos] = playerIdx === 0 ? 'X' : 'O';
@@ -63,6 +63,8 @@ io.on('connection', socket => {
         io.to(roomId).emit('state', room.state);
       }
     }
+
+    // Connect 4
     if (room.game === 'connect4' && moveData.type === 'drop') {
       for (let r = 5; r >= 0; r--) {
         if (!room.state.board[r][moveData.col]) {
@@ -89,4 +91,4 @@ function initGame(g) {
 }
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log('PlayFree.games LIVE - Chess Perfected!'));
+server.listen(PORT, () => console.log('PlayFree.games LIVE!'));
